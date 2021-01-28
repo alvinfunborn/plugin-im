@@ -1,5 +1,6 @@
 package org.sanhenanli.plugin.im.model;
 
+import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 
 /**
@@ -35,5 +36,8 @@ public class Message {
      * 消息发送的时间戳
      */
     protected long timestamp;
-
+    /**
+     * 附加值: 发送者, 业务标识等, 仅通讯时使用, 不存储
+     */
+    protected JSONObject attachment;
 }

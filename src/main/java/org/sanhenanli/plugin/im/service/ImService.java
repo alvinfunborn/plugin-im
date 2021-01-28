@@ -44,6 +44,14 @@ public interface ImService {
     Map<String, Boolean> send(Message message);
 
     /**
+     * 获取某会话某终端的消息盒子
+     * @param imId 会话id
+     * @param eid 终端id
+     * @return 消息盒子
+     */
+    MessageBox box(String imId, String eid);
+
+    /**
      * 获取某终端的消息盒子列表, 这些消息盒子的最后一条消息早于此msgId
      * @param eid 终端id
      * @param msgId 消息id

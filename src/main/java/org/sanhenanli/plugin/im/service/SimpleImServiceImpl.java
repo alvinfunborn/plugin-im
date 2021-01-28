@@ -1,5 +1,6 @@
 package org.sanhenanli.plugin.im.service;
 
+import com.alibaba.fastjson.JSONObject;
 import org.sanhenanli.plugin.im.model.*;
 import org.sanhenanli.plugin.im.repository.EndpointFocusRepository;
 import org.sanhenanli.plugin.im.repository.MessageRepository;
@@ -37,7 +38,7 @@ public class SimpleImServiceImpl implements ImService {
         List<VirtualEndpoint> virtualEndpoints = virtualEndpointRepository.findAllByImId(imId);
         virtualEndpoints.forEach(ve -> {
             if (message.getTag() == null || ve.getTag().equals(message.getTag())) {
-                boolean pushed = imPusher.push(ve.getEid(), message.getContent());
+                boolean pushed = imPusher.push(ve.getEid(), JSONObject.toJSONString(message));
                 if (pushed) {
                     // 成功推送, 终端在连接状态, 判断是已读未读
                     String currentImId = endpointFocusRepository.currentIm(ve.getEid());
@@ -98,22 +99,11 @@ public class SimpleImServiceImpl implements ImService {
     }
 
     @Override
-    public List<MessageBox> historyBox(String eid, String msgId, int size) {
-        List<VirtualEndpoint> virtualEndpoints = virtualEndpointRepository.findAllByEidAndMsgBeforeOrderByMsgIdDesc(eid, msgId, size);
-        List<MessageBox> messageBoxes = new ArrayList<>();
-        virtualEndpoints.forEach(ve -> {
-            String imId = ve.getImId();
-            MessageBox box = box(imId, eid);
-            messageBoxes.add(box);
-        });
-        return messageBoxes;
-    }
-
-    private MessageBox box(String imId, String eid) {
+    public MessageBox box(String imId, String eid) {
         VirtualEndpoint virtualEndpoint = getVirtualEndpoint(imId, eid);
         String tag = virtualEndpoint.getTag();
-        long lastReadMsgId = virtualEndpoint.getLastReadMsgId();
-        int count = messageRepository.countByImIdAndMsgIdAfterAndTagOrTagIsNull(imId, lastReadMsgId, tag);
+        Long lastReadMsgId = virtualEndpoint.getLastReadMsgId();
+        int count = lastReadMsgId == null ? messageRepository.countByImIdAndTagOrTagIsNull(imId, tag) : messageRepository.countByImIdAndMsgIdAfterAndTagOrTagIsNull(imId, lastReadMsgId, tag);
         List<Message> messages = history(imId, eid, null, 1);
         MessageBox messageBox = new MessageBox();
         messageBox.setImId(imId);
@@ -129,14 +119,29 @@ public class SimpleImServiceImpl implements ImService {
     }
 
     @Override
+    public List<MessageBox> historyBox(String eid, String msgId, int size) {
+        List<VirtualEndpoint> virtualEndpoints = virtualEndpointRepository.findAllByEidAndMsgBeforeOrderByMsgIdDesc(eid, msgId, size);
+        List<MessageBox> messageBoxes = new ArrayList<>();
+        virtualEndpoints.forEach(ve -> {
+            String imId = ve.getImId();
+            MessageBox box = box(imId, eid);
+            messageBoxes.add(box);
+        });
+        return messageBoxes;
+    }
+
+    @Override
     public List<Message> history(String imId, String eid, String msgId, int size) {
         VirtualEndpoint virtualEndpoint = getVirtualEndpoint(imId, eid);
         String tag = virtualEndpoint.getTag();
         List<Message> messages;
-        if (msgId == null) {
-            messages = messageRepository.findByImIdAndTagOrTagIsNull(imId, tag, size);
+        if (msgId == null || "".equals(msgId)) {
+            messages = messageRepository.findByImIdAndTagOrTagIsNullOrderByMsgIdDesc(imId, tag, size);
         } else {
-            messages = messageRepository.findByImIdAndMsgIdBeforeAndTagOrTagIsNull(imId, Long.parseLong(msgId), tag, size);
+            messages = messageRepository.findByImIdAndMsgIdBeforeAndTagOrTagIsNullOrderByMsgIdDesc(imId, Long.parseLong(msgId), tag, size);
+        }
+        if (!messages.isEmpty()) {
+            virtualEndpointRepository.trackLastMsgId(imId, eid, messages.get(0).getId(), true);
         }
         return messages;
     }
@@ -144,10 +149,10 @@ public class SimpleImServiceImpl implements ImService {
     @Override
     public List<Message> historySent(String imId, String eid, String msgId, int size) {
         List<Message> messages;
-        if (msgId == null) {
-            messages = messageRepository.findByImIdAndEid(imId, eid, size);
+        if (msgId == null || "".equals(msgId)) {
+            messages = messageRepository.findByImIdAndEidOrderByMsgIdDesc(imId, eid, size);
         } else {
-            messages = messageRepository.findByImIdAndMsgIdBeforeAndEid(imId, Long.parseLong(msgId), eid, size);
+            messages = messageRepository.findByImIdAndMsgIdBeforeAndEidOrderByMsgIdDesc(imId, Long.parseLong(msgId), eid, size);
         }
         return messages;
     }
